@@ -1,0 +1,22 @@
+# Dependencias
+node_modules/
+.pnpm-store/
+
+# Variables de entorno
+.env
+.env.local
+.env.production
+
+# Archivos compilados
+dist/
+build/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Configuraciones de editor
+.vscode/
+.idea/
+*.swp
