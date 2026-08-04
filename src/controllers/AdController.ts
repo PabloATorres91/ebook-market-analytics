@@ -23,10 +23,9 @@ export class AdController {
     return await this.repository.getAdById(id);
   }
 
-  // Obtener tendencias
-  async getTrends(country?: string) {
-    return await this.repository.getTrends(country);
-  }
+async getTrends(country?: string, minDays: number = 30) {
+  return await this.repository.getTrends(country, minDays);
+}
 
   // Sincronizar anuncios de Meta
   async syncAds(keyword: string, country: string) {
