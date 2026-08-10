@@ -49,7 +49,7 @@ async saveAd(ad: Omit<Ad, 'first_seen' | 'last_seen'>): Promise<Ad> {
     let paramIndex = 1;
 
     if (params.keyword) {
-      query += ` AND a.body ILIKE $${paramIndex}`;
+      query += ` AND (a.page_name ILIKE $${paramIndex} OR a.body ILIKE $${paramIndex})`;
       values.push(`%${params.keyword}%`);
       paramIndex++;
     }

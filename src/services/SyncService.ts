@@ -54,9 +54,9 @@ export class SyncService {
   }
 
   // Sincronización manual desde la API
-  async syncNow(keyword: string, country?: string): Promise<void> {
+  async syncNow(keyword: string, country?: string, minDays: number = 0): Promise<void> {
     if (country) {
-      const ads = await this.metaService.syncAds(keyword, country);
+      const ads = await this.metaService.syncAds(keyword, country, minDays);
       console.log(`✅ Sincronización manual completada: ${ads.length} anuncios`);
     } else {
       await this.syncAllCountries(keyword);
