@@ -12,14 +12,19 @@ export class SyncService {
   }
 
   // Sincronizar todos los países con una palabra clave
-  async syncAllCountries(keyword: string): Promise<void> {
-    console.log(`🔄 Iniciando sincronización para "${keyword}"...`);
-    
+  async syncAllCountries(
+    keyword: string,
+    minDays: number = 14,
+    periodDays: number = 0
+  ): Promise<void> {
+    console.log(`🔄 Iniciando sincronización para "${keyword}" en todos los países...`);
+
     const results: any[] = [];
 
     for (const country of SUPPORTED_COUNTRIES) {
       try {
-        const ads = await this.metaService.syncAds(keyword, country.code);
+        // ✅ Pasar minDays y periodDays a syncAds
+        const ads = await this.metaService.syncAds(keyword, country.code, minDays, periodDays);
         results.push({
           country: country.code,
           count: ads.length,
@@ -54,12 +59,18 @@ export class SyncService {
   }
 
   // Sincronización manual desde la API
-  async syncNow(keyword: string, country?: string, minDays: number = 0): Promise<void> {
+  async syncNow(
+    keyword: string,
+    country?: string,
+    minDays: number = 14,
+    periodDays: number = 0  // ✅ Valor por defecto 0 (todos los anuncios)
+  ): Promise<void> {
     if (country) {
-      const ads = await this.metaService.syncAds(keyword, country, minDays);
+      const ads = await this.metaService.syncAds(keyword, country, minDays, periodDays);
       console.log(`✅ Sincronización manual completada: ${ads.length} anuncios`);
     } else {
-      await this.syncAllCountries(keyword);
+      await this.syncAllCountries(keyword, minDays, periodDays);
+
     }
   }
 }

@@ -16,7 +16,12 @@ export class MetaAdsService {
   }
 
   // Obtener anuncios de la API de Meta
-  async fetchAds(keyword: string, country: string, minDays: number = 0): Promise<MetaAdResponse[]> {
+  async fetchAds(
+    keyword: string,
+    country: string,
+    minDays: number = 0,
+    periodDays: number = 30 // ✅ Nuevo parámetro
+  ): Promise<MetaAdResponse[]> {
     if (!this.accessToken) {
       console.warn('⚠️ META_ACCESS_TOKEN no configurado. Usando datos mock.');
       return this.getMockAds(keyword, country);
@@ -30,18 +35,35 @@ export class MetaAdsService {
       ad_reached_countries: `['${country}']`,
       search_type: 'KEYWORD_EXACT_PHRASE',
       languages: '["es"]',
+      ad_active_status: 'ACTIVE',
       fields: 'id,page_name,ad_creative_bodies,ad_delivery_start_time,ad_snapshot_url,publisher_platforms',
       access_token: this.accessToken,
-      limit: '50'
+      limit: '50',
+      // ✅ ORDENAR POR FECHA DE INICIO (MÁS ANTIGUOS PRIMERO)
+      sort_by: 'ad_delivery_start_time_asc'
     };
 
-    // ✅ 2. Si minDays > 0, agregar el filtro de fecha a la llamada a Meta
-    if (minDays > 0) {
-      // Calculamos la fecha límite: hoy menos los días mínimos
-      const limitDate = new Date(Date.now() - minDays * 24 * 60 * 60 * 1000);
-      // ✅ Serializar correctamente el filtro de fecha
-      params['ad_delivery_start_time[lte]'] = limitDate.toISOString();
+    // ✅ 2. Filtro por período de tiempo (si periodDays > 0)
+    if (periodDays > 0) {
+      const today = new Date();
+      const minDate = new Date(today);
+      minDate.setDate(today.getDate() - periodDays);
 
+      const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+      params.ad_delivery_date_min = formatDate(minDate);
+      params.ad_delivery_date_max = formatDate(today);
+      
+      console.log(`🔍 Filtrando anuncios activos entregados entre ${params.ad_delivery_date_min} y ${params.ad_delivery_date_max} (últimos ${periodDays} días)`);
+    } else {
+      // ✅ Si periodDays === 0, NO aplicar filtro de fechas
+      console.log('🔍 Sin filtro de período temporal (todos los anuncios activos)');
+    }
+
+    // ✅ 3. Filtro por antigüedad mínima (minDays)
+    if (minDays > 0) {
+      const limitDate = new Date(Date.now() - minDays * 24 * 60 * 60 * 1000);
+      params['ad_delivery_start_time[lte]'] = limitDate.toISOString();
       console.log(`🔍 Filtrando anuncios con más de ${minDays} días de antigüedad (inicio antes de ${limitDate.toISOString()})`);
     }
 
@@ -120,9 +142,14 @@ export class MetaAdsService {
   }
 
   // Sincronizar anuncios: obtener de Meta y guardar en DB
-  async syncAds(keyword: string, country: string, minDays: number = 0): Promise<Ad[]> {
-    console.log(`📌 syncAds recibió minDays: ${minDays}`);
-    const metaAds = await this.fetchAds(keyword, country, minDays);
+  async syncAds(
+    keyword: string,
+    country: string,
+    minDays: number = 0,
+    periodDays: number = 0  // ✅ Valor por defecto 0 (todos los anuncios)
+  ): Promise<Ad[]> {
+    console.log(`📌 syncAds recibió minDays: ${minDays}, periodDays: ${periodDays}`);
+    const metaAds = await this.fetchAds(keyword, country, minDays, periodDays);
 
     if (metaAds.length === 0) {
       console.log(`⚠️ No se encontraron anuncios para "${keyword}" en ${country}`);
@@ -132,8 +159,9 @@ export class MetaAdsService {
     const savedAds: Ad[] = [];
     for (const metaAd of metaAds) {
       const ad = this.mapToAd(metaAd, country);
+
+      // ✅ Filtro manual para asegurar antigüedad
       const daysActive = Math.floor((Date.now() - new Date(ad.start_time).getTime()) / (1000 * 60 * 60 * 24));
-      console.log(`📊 Anuncio ${ad.id} tiene ${daysActive} días activos`);
 
       // ✅ Solo guardar si cumple con la antigüedad mínima
       if (daysActive >= minDays) {

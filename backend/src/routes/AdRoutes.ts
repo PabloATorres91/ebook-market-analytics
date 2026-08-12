@@ -14,7 +14,7 @@ export async function adRoutes(fastify: FastifyInstance) {
   fastify.get('/api/ads/search', async (request, reply) => {
     try {
       const query = request.query as any;
-      
+
       const searchParams: any = {
         page: query.page ? parseInt(query.page) : 1,
         limit: query.limit ? parseInt(query.limit) : 20
@@ -24,7 +24,7 @@ export async function adRoutes(fastify: FastifyInstance) {
       if (query.country) searchParams.country = query.country;
       if (query.minDaysActive) searchParams.minDaysActive = parseInt(query.minDaysActive);
       if (query.maxDaysActive) searchParams.maxDaysActive = parseInt(query.maxDaysActive);
-      
+
       const results = await controller.searchAds(searchParams);
 
       return reply.send({
@@ -46,7 +46,7 @@ export async function adRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const ad = await controller.getAdById(id);
-      
+
       if (!ad) {
         return reply.status(404).send({
           success: false,
@@ -88,9 +88,9 @@ export async function adRoutes(fastify: FastifyInstance) {
     try {
       const { country, days = '30' } = request.query as { country?: string; days?: string };
       const minDays = parseInt(days);
-      
+
       const trends = await controller.getTrends(country, minDays);
-      
+
       const total = trends.length;
       const avgDays = trends.reduce((acc, ad) => {
         const daysActive = Math.floor((Date.now() - new Date(ad.start_time).getTime()) / (1000 * 60 * 60 * 24));
@@ -130,7 +130,7 @@ export async function adRoutes(fastify: FastifyInstance) {
     try {
       const { country } = request.params as { country: string };
       const stats = await controller.getCountryStats(country);
-      
+
       return reply.send({
         success: true,
         data: stats
@@ -147,7 +147,12 @@ export async function adRoutes(fastify: FastifyInstance) {
   // Sincronizar manualmente
   fastify.post('/api/ads/sync', async (request, reply) => {
     try {
-      const { keyword, country, minDays } = request.body as { keyword: string; country?: string; minDays?: number };
+      const { keyword, country, minDays, periodDays } = request.body as {
+        keyword: string;
+        country?: string;
+        minDays?: number;
+        periodDays?: number;
+      };
 
       if (!keyword) {
         return reply.status(400).send({
@@ -157,7 +162,7 @@ export async function adRoutes(fastify: FastifyInstance) {
       }
 
       const syncService = new SyncService();
-      await syncService.syncNow(keyword, country, minDays || 0);
+      await syncService.syncNow(keyword, country, minDays || 14, periodDays || 0);
 
       return reply.send({
         success: true,
@@ -177,10 +182,10 @@ export async function adRoutes(fastify: FastifyInstance) {
     try {
       const { keyword, countries } = request.query as { keyword: string; countries: string };
       const countryList = countries ? countries.split(',') : ['AR', 'MX', 'CO'];
-      
+
       const analytics = new AnalyticsService();
       const results = await analytics.compareCountries(keyword, countryList);
-      
+
       return reply.send({
         success: true,
         data: results
@@ -198,17 +203,17 @@ export async function adRoutes(fastify: FastifyInstance) {
   fastify.get('/api/ads/evolution', async (request, reply) => {
     try {
       const { keyword, country } = request.query as { keyword: string; country: string };
-      
+
       if (!keyword || !country) {
         return reply.status(400).send({
           success: false,
           error: 'Faltan parámetros: keyword y country son obligatorios'
         });
       }
-      
+
       const analytics = new AnalyticsService();
       const results = await analytics.getEvolution(keyword, country);
-      
+
       return reply.send({
         success: true,
         data: results
