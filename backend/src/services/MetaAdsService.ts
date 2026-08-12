@@ -16,18 +16,20 @@ export class MetaAdsService {
   }
 
   // Obtener anuncios de la API de Meta
-  async fetchAds(
-    keyword: string,
-    country: string,
-    minDays: number = 0,
-    periodDays: number = 30 // ✅ Nuevo parámetro
-  ): Promise<MetaAdResponse[]> {
+  // src/services/MetaAdsService.ts
+
+  async fetchAds(keyword: string, country: string, minDays: number = 0, periodDays: number = 0): Promise<MetaAdResponse[]> {
     if (!this.accessToken) {
       console.warn('⚠️ META_ACCESS_TOKEN no configurado. Usando datos mock.');
       return this.getMockAds(keyword, country);
     }
 
     const url = `${this.baseUrl}/ads_archive`;
+    let allAds: MetaAdResponse[] = [];
+    let nextPage: string | null = null;
+    let pageCount = 0;
+    const maxPages = 5; // ✅ Límite para no sobrecargar (5 páginas = 250 anuncios)
+    const limit = 50;
 
     // ✅ 1. Construir los parámetros base
     const params: any = {
@@ -38,8 +40,7 @@ export class MetaAdsService {
       ad_active_status: 'ACTIVE',
       fields: 'id,page_name,ad_creative_bodies,ad_delivery_start_time,ad_snapshot_url,publisher_platforms',
       access_token: this.accessToken,
-      limit: '50',
-      // ✅ ORDENAR POR FECHA DE INICIO (MÁS ANTIGUOS PRIMERO)
+      limit: limit.toString(),
       sort_by: 'ad_delivery_start_time_asc'
     };
 
@@ -53,10 +54,9 @@ export class MetaAdsService {
 
       params.ad_delivery_date_min = formatDate(minDate);
       params.ad_delivery_date_max = formatDate(today);
-      
+
       console.log(`🔍 Filtrando anuncios activos entregados entre ${params.ad_delivery_date_min} y ${params.ad_delivery_date_max} (últimos ${periodDays} días)`);
     } else {
-      // ✅ Si periodDays === 0, NO aplicar filtro de fechas
       console.log('🔍 Sin filtro de período temporal (todos los anuncios activos)');
     }
 
@@ -67,19 +67,56 @@ export class MetaAdsService {
       console.log(`🔍 Filtrando anuncios con más de ${minDays} días de antigüedad (inicio antes de ${limitDate.toISOString()})`);
     }
 
-    try {
-      console.log(`🔍 Consultando Meta: ${url}?${new URLSearchParams(params).toString()}`);
-      const response = await axios.get(url, { params });
-      console.log(`✅ Meta respondió con ${response.data.data?.length || 0} anuncios`);
-      return response.data.data || [];
-    } catch (error: any) {
-      if (this.isTokenExpiredError(error)) {
-        console.error('❌ TOKEN EXPIRADO...');
-        throw new Error('TOKEN_EXPIRED');
+    // ✅ 4. Bucle de paginación
+    do {
+      try {
+        let response: any; // ✅ Tipo explícito para la respuesta
+        let data: any;     // ✅ Tipo explícito para los datos
+
+        if (nextPage) {
+          // Usar la URL completa que devuelve Meta en paging.next
+          const nextUrl: URL = new URL(nextPage); // ✅ Tipo explícito URL
+          response = await axios.get(nextUrl.toString());
+        } else {
+          // Primera página: construir la URL con todos los parámetros
+          const queryString = new URLSearchParams(params).toString();
+          const fullUrl = `${url}?${queryString}`;
+          console.log(`🔍 Consultando Meta (página ${pageCount + 1}): ${fullUrl}`);
+          response = await axios.get(fullUrl);
+        }
+
+        data = response.data;
+        const ads = data.data || [];
+
+        console.log(`📄 Página ${pageCount + 1}: ${ads.length} anuncios recibidos`);
+
+        allAds = allAds.concat(ads);
+        pageCount++;
+
+        // Obtener la URL de la página siguiente
+        nextPage = data.paging?.next || null;
+
+        if (nextPage) {
+          console.log(`⬇️  Hay más resultados. Siguiente página disponible.`);
+        }
+
+      } catch (error: any) {
+        if (this.isTokenExpiredError(error)) {
+          console.error('❌ TOKEN EXPIRADO...');
+          throw new Error('TOKEN_EXPIRED');
+        }
+        console.error(`❌ Error al obtener página ${pageCount + 1}:`, error.message);
+        break;
       }
-      console.error('❌ Error al obtener anuncios de Meta:', error);
-      return [];
+
+    } while (nextPage && pageCount < maxPages);
+
+    if (pageCount >= maxPages && nextPage) {
+      console.warn(`⚠️ Se alcanzó el límite de ${maxPages} páginas. Puede haber más anuncios.`);
     }
+
+    console.log(`✅ Total: ${allAds.length} anuncios obtenidos en ${pageCount} páginas`);
+    return allAds;
   }
 
 
@@ -168,8 +205,6 @@ export class MetaAdsService {
         const saved = await this.repository.saveAd(ad);
         savedAds.push(saved);
         console.log(`✅ Guardado anuncio ${ad.id} con ${daysActive} días activos`);
-      } else {
-        console.log(`⏭️ Anuncio ${ad.id} con ${daysActive} días activos (menos de ${minDays}) - NO guardado`);
       }
     }
 
