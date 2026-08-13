@@ -10,6 +10,7 @@ export interface Ad {
   country_code: string;
   first_seen: Date;
   last_seen: Date;
+  ad_creation_time?: Date; // ✅ Nuevo campo
 }
 
 export interface MetaAdResponse {
@@ -19,6 +20,7 @@ export interface MetaAdResponse {
   ad_delivery_start_time: string;
   ad_snapshot_url: string;
   publisher_platforms: string[];
+  ad_creation_time?: string; // ✅ Nuevo campo
 }
 
 export interface AdSearchParams {

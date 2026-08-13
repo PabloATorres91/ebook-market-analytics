@@ -5,34 +5,37 @@ import type { Ad, AdSearchParams } from '../models/Ad.js';
 
 export class AdRepository {
   // Guardar un anuncio (o actualizar si ya existe)
-async saveAd(ad: Omit<Ad, 'first_seen' | 'last_seen'>): Promise<Ad> {
-  const query = `
+  async saveAd(ad: Omit<Ad, 'first_seen' | 'last_seen'>): Promise<Ad> {
+    const query = `
     INSERT INTO ads (
       id, page_name, body, snapshot_url, start_time, 
-      publisher_platforms, country_code, first_seen, last_seen
+      publisher_platforms, country_code, first_seen, last_seen,
+      ad_creation_time
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), $8)
     ON CONFLICT (id) DO UPDATE SET
       page_name = EXCLUDED.page_name,
       body = EXCLUDED.body,
       snapshot_url = EXCLUDED.snapshot_url,
-      last_seen = NOW()
+      last_seen = NOW(),
+      ad_creation_time = COALESCE(EXCLUDED.ad_creation_time, ads.ad_creation_time)
     RETURNING *;
   `;
 
-  const values = [
-    ad.id,
-    ad.page_name,
-    ad.body,
-    ad.snapshot_url,
-    ad.start_time,
-    JSON.stringify(ad.publisher_platforms), // ✅ Convertir a JSON
-    ad.country_code
-  ];
+    const values = [
+      ad.id,
+      ad.page_name,
+      ad.body,
+      ad.snapshot_url,
+      ad.start_time,
+      JSON.stringify(ad.publisher_platforms), // ✅ Convertir a JSON
+      ad.country_code,
+      ad.ad_creation_time || null // ✅ Nuevo valor
+    ];
 
-  const result = await pool.query(query, values);
-  return result.rows[0];
-}
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  }
 
   // Buscar anuncios con filtros
   async searchAds(params: AdSearchParams): Promise<Ad[]> {
@@ -106,8 +109,8 @@ async saveAd(ad: Omit<Ad, 'first_seen' | 'last_seen'>): Promise<Ad> {
   }
 
   // Obtener tendencias (anuncios más activos)
-async getTrends(country?: string, minDays: number = 30): Promise<Ad[]> {
-  let query = `
+  async getTrends(country?: string, minDays: number = 30): Promise<Ad[]> {
+    let query = `
     SELECT 
       a.*,
       c.name as country_name,
@@ -117,18 +120,18 @@ async getTrends(country?: string, minDays: number = 30): Promise<Ad[]> {
     WHERE EXTRACT(DAY FROM (NOW() - a.start_time)) > $1
   `;
 
-  const values: any[] = [minDays];
-  let paramIndex = 2;
+    const values: any[] = [minDays];
+    let paramIndex = 2;
 
-  if (country) {
-    query += ` AND a.country_code = $${paramIndex}`;
-    values.push(country);
-    paramIndex++;
+    if (country) {
+      query += ` AND a.country_code = $${paramIndex}`;
+      values.push(country);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY days_active DESC LIMIT 20`;
+
+    const result = await pool.query(query, values);
+    return result.rows;
   }
-
-  query += ` ORDER BY days_active DESC LIMIT 20`;
-
-  const result = await pool.query(query, values);
-  return result.rows;
-}
 }

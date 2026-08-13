@@ -38,7 +38,7 @@ export class MetaAdsService {
       search_type: 'KEYWORD_EXACT_PHRASE',
       languages: '["es"]',
       ad_active_status: 'ACTIVE',
-      fields: 'id,page_name,ad_creative_bodies,ad_delivery_start_time,ad_snapshot_url,publisher_platforms',
+      fields: 'id,page_name,ad_creative_bodies,ad_delivery_start_time,ad_snapshot_url,publisher_platforms,ad_creation_time',
       access_token: this.accessToken,
       limit: limit.toString(),
       sort_by: 'ad_delivery_start_time_asc'
@@ -174,7 +174,8 @@ export class MetaAdsService {
       publisher_platforms: metaAd.publisher_platforms || [], // ✅ Debe ser un array
       country_code: countryCode,
       first_seen: new Date(),
-      last_seen: new Date()
+      last_seen: new Date(),
+      ad_creation_time: metaAd.ad_creation_time ? new Date(metaAd.ad_creation_time) : undefined, // ✅ Nuevo campo
     };
   }
 
